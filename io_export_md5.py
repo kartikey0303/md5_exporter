@@ -857,10 +857,10 @@ class ExportMD5(bpy.types.Operator):
   # print(bpy.data.actions)
   #search for list of actions to export as .md5anims
   #md5animtargets = []
-  for anim in bpy.data.actions:
-    print(anim.name)
-    scene.custom.add()
-    scene.custom[-1].name = anim.name
+  # for anim in bpy.data.actions:
+  #   print(anim.name)
+  #   scene.custom.add()
+  #   scene.custom[-1].name = anim.name
   #print(md5animtargets[0])
 
   #md5animtarget = None
@@ -1053,6 +1053,8 @@ class TerasologyExportPanel(bpy.types.Panel):
         layout = self.layout
         scene = bpy.context.scene
         rd = scene.render
+        st = context.space_data
+        ob=context.object
         preferences = context.user_preferences.addons[__name__].preferences
         
         layout.prop(preferences, "terasology_module_directory", text="Ter. Module")
@@ -1063,7 +1065,8 @@ class TerasologyExportPanel(bpy.types.Panel):
         animFileName = getTargetTerasologyAnimFileName(context)
         col.operator(TerasologyMD5MeshExportOperator.bl_idname, text="Export " + meshFileName)
         col.operator(TerasologyMD5AnimExportOperator.bl_idname, text="Export " + animFileName)
-        col.template_list("RENDERLAYER_UL_renderlayers", "", scene, "custom", scene, "custom_index", rows=2)
+        #layout.template_ID(st, "action", new="action.new", unlink="action.unlink")
+        col.template_list("RENDERLAYER_UL_renderlayers", "", bpy.data, "actions", scene, "action_list_index")
         col.operator_menu_enum(ExportMD5.bl_idname, "md5animtarget", text="select animation")
         col.operator(TerasologyMD5MeshAndAnimExportOperator.bl_idname, text="Export Both")
         
@@ -1081,6 +1084,7 @@ def register():
   bpy.utils.register_module(__name__)  #mikshaw
   bpy.types.INFO_MT_file_export.append(menu_func)
   bpy.types.Scene.custom = CollectionProperty(type = CustomProp)
+  bpy.types.Scene.action_list_index = bpy.props.IntProperty()
   bpy.types.Scene.custom_index = IntProperty()
 
 def unregister():
