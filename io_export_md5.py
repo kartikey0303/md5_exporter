@@ -752,6 +752,8 @@ def save_md5(modelFilePath=None, animationFilePath=None):
     rangeend = 0
     if arm_action:
       animation = ANIMATIONS[arm_action.name] = MD5Animation(skeleton)
+      print(animation)
+      print(ANIMATIONS)
   #   armature.animation_data.action = action
       bpy.context.scene.update()
   #   framemin, framemax = bpy.context.active_object.animation_data.Action(fcurves.frame_range)
@@ -900,18 +902,7 @@ class ExportMD5(bpy.types.Operator):
     save_md5(modelFilePath, animationFilePath)
 
     scene=context.scene
-    idx=scene.custom_index
-
-    try:
-      item = scene.custom[idx]
-    except IndexError:
-      pass
-    
-    for anim in bpy.data.actions:
-      print(anim.name)
-      scene.custom.add()
-      scene.custom[-1].name = anim.name
-
+    # idx=scene.custom_index
     # item = scene.custom.add()
     # item.id = len(scene.custom)
     # item.name = bpy.data.actions.name
@@ -1027,19 +1018,34 @@ class TerasologyMd5AddonPreferences(bpy.types.AddonPreferences):
 
 class RENDERLAYER_UL_renderlayers(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        # assert(isinstance(item, bpy.types.SceneRenderLayer)
-        # layer = item
-        # if self.layout_type in {'DEFAULT', 'COMPACT'}:
-        #     layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
-        #     layout.prop(layer, "use", text="", index=index)
-        # elif self.layout_type == 'GRID':
-        #     layout.alignment = 'CENTER'
-        #     layout.label("", icon_value=icon)
-      split = layout.split(0.3)
-      split.label("Index: %d" %(index))
-      split.prop(item,"name", text="", emboss=False, translate=False, icon_value=icon)
+        #assert(isinstance(item, bpy.types.SceneRenderLayer)
+        layer = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
+            layout.prop(layer, "enabled", text="", index=index)
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label("", icon_value=icon)
+      #split = layout.split(0.3)
+      #split.label("Index: %d" %(index))
+      #layout.prop(item,"name", text="", emboss=False, translate=False, icon_value=icon)
     def invoke(self, context, event):
       pass
+
+class action_poplulate(bpy.types.Operator):
+  bl_idname="scene.populate"
+  bl_label="Refresh action list"
+
+  def execute(self, context):
+
+    context.scene.action_group.clear()
+
+    for anim in bpy.data.actions:
+      item = context.scene.action_group.add()
+      item.name = anim.name
+      item.enabled = False
+    return{'FINISHED'}
+
 
     
 class TerasologyExportPanel(bpy.types.Panel):
@@ -1053,7 +1059,7 @@ class TerasologyExportPanel(bpy.types.Panel):
         layout = self.layout
         scene = bpy.context.scene
         rd = scene.render
-        st = context.space_data
+        # st = context.space_data
         ob=context.object
         preferences = context.user_preferences.addons[__name__].preferences
         
@@ -1066,32 +1072,36 @@ class TerasologyExportPanel(bpy.types.Panel):
         col.operator(TerasologyMD5MeshExportOperator.bl_idname, text="Export " + meshFileName)
         col.operator(TerasologyMD5AnimExportOperator.bl_idname, text="Export " + animFileName)
         #layout.template_ID(st, "action", new="action.new", unlink="action.unlink")
-        col.template_list("RENDERLAYER_UL_renderlayers", "", bpy.data, "actions", scene, "action_list_index")
-        col.operator_menu_enum(ExportMD5.bl_idname, "md5animtarget", text="select animation")
-        col.operator(TerasologyMD5MeshAndAnimExportOperator.bl_idname, text="Export Both")
+        col.operator("scene.populate")
+        col.template_list("RENDERLAYER_UL_renderlayers", "", scene, "action_group", scene, "action_list_index")
+        #col.operator_menu_enum(ExportMD5.bl_idname, "md5animtarget", text="select animation")
+        col.operator(TerasologyMD5MeshAndAnimExportOperator.bl_idname, text="Export Selected Animations")
         
-        layout.label(text="Note: Blend & scene name deterines file name")
+        layout.label(text="Note: Blend & scene name determines file name")
 
 def menu_func(self, context):
   default_path = os.path.splitext(bpy.data.filepath)[0]
   self.layout.operator(ExportMD5.bl_idname, text="idTech 4 MD5 (.md5mesh .md5anim)", icon='BLENDER').filepath = default_path
   
 class CustomProp(bpy.types.PropertyGroup):
-  '''name = StringProperty() '''
-  id = IntProperty()
+  name = StringProperty()
+  enabled = BoolProperty()
+  #name = bpy.data.actions
 
 def register():
   bpy.utils.register_module(__name__)  #mikshaw
   bpy.types.INFO_MT_file_export.append(menu_func)
-  bpy.types.Scene.custom = CollectionProperty(type = CustomProp)
-  bpy.types.Scene.action_list_index = bpy.props.IntProperty()
+  # bpy.types.Scene.custom = CollectionProperty(type = CustomProp)
+  # bpy.types.Scene.action_list_index = bpy.props.IntProperty()
   bpy.types.Scene.custom_index = IntProperty()
+  bpy.types.Scene.action_group = CollectionProperty(type=CustomProp)
 
 def unregister():
   bpy.utils.unregister_module(__name__)  #mikshaw
   bpy.types.INFO_MT_file_export.remove(menu_func)
-  del bpy.types.Scene.custom
-  del bpy.types.Scene.custom_index
+  # del bpy.types.Scene.custom
+  # del bpy.types.Scene.custom_index
+  del bpy.types.Scene.action_group
 
 if __name__ == "__main__":
   register()
