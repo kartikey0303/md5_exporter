@@ -33,8 +33,6 @@ bl_info = { # changed from bl_addon_info in 2.57 -mikshaw
 
 import bpy,struct,math,os,time,sys,mathutils
 
-def get_activeSceneObject():
-    return bpy.context.scene.objects.active.name
 
 #MATH UTILTY
 
@@ -550,7 +548,7 @@ def generateboundingbox(objects, md5animation, framerange):
           [0.0,  0.0, 0.0, 1.0],
           ]
         for v in bbox:
-            #print("v",v)
+            # print("v",v)
             corners.append(point_by_matrix (v, matrix))
             #print("corners", corners)
     (min, max) = getminmax(corners)
@@ -667,6 +665,11 @@ def createSubMesh(blenderFacesWithRelativeVertexIndices, blenderMesh, blenderMes
 
         Face(md5SubMesh, md5VerticesOfFace[0], md5VerticesOfFace[1], md5VerticesOfFace[2])
 
+def checkPath(filePath):#python does not create directory just the file. This function added to create t eh directory
+  dir=os.path.dirname(filePath)
+  if not os.path.exists(dir):
+    os.makedirs(dir)
+
 #SERIALIZE FUNCTION
 def save_md5(modelFilePath=None, animationFilePath=None):
   """
@@ -752,8 +755,6 @@ def save_md5(modelFilePath=None, animationFilePath=None):
     rangeend = 0
     if arm_action:
       animation = ANIMATIONS[arm_action.name] = MD5Animation(skeleton)
-      print(animation)
-      print(ANIMATIONS)
   #   armature.animation_data.action = action
       bpy.context.scene.update()
   #   framemin, framemax = bpy.context.active_object.animation_data.Action(fcurves.frame_range)
@@ -806,26 +807,35 @@ def save_md5(modelFilePath=None, animationFilePath=None):
         for mesh in range (1, len(meshes)):
           for submesh in meshes[mesh].submeshes:
             submesh.bindtomesh(meshes[0])
+      checkPath(modelFilePath)#python does not create directory just the file. This function added to create t eh directory
       try:
         file = open(modelFilePath, 'w')
-      except IOError:
-        errmsg = "IOError " #%s: %s" % (errno, strerror)
+      except Exception as e:
+        print(str(e))
+        # errmsg = "IOError " #%s: %s" % (errno, strerror)
       buffer = skeleton.to_md5mesh(len(meshes[0].submeshes))
-      #for mesh in meshes:
       buffer = buffer + meshes[0].to_md5mesh()
       file.write(buffer)
       file.close()
       print( "saved mesh to " + modelFilePath )
 
 
-  if animationFilePath:
+  if animationFilePath:   
       #save animation file
+      if modelFilePath == None:
+        if len(meshes)>1:
+          for mesh in range (1, len(meshes)):
+            for submesh in meshes[mesh].submeshes:
+              submesh.bindtomesh(meshes[0])
       if len(ANIMATIONS)>0:
         anim = ANIMATIONS.popitem()[1] #ANIMATIONS.values()[0]
+        checkPath(animationFilePath)#python does not create directory just the file. This function added to create t eh directory
         try:
           file = open(animationFilePath, 'w')
-        except IOError:
-          errmsg = "IOError " #%s: %s" % (errno, strerror)
+        except Exception as e:
+          print(str(e))
+          # errmsg = "IOError " #%s: %s" % (errno, strerror)  
+        meshes[0].to_md5mesh()#HACK: Added line to get rid of bounding box issue
         objects = []
         for submesh in meshes[0].submeshes:
           if len(submesh.weights) > 0:
@@ -844,9 +854,7 @@ def save_md5(modelFilePath=None, animationFilePath=None):
   
 ##########
 #export class registration and interface
-import bpy
 from bpy.props import *
-from bpy.types import Panel, UIList
 class ExportMD5(bpy.types.Operator):
   '''Export to idTech 4 MD5 (.md5mesh .md5anim)'''
   bl_idname = "export.md5"
@@ -855,21 +863,16 @@ class ExportMD5(bpy.types.Operator):
   logenum = [("console","Console","log to console"),
              ("append","Append","append to log file"),
              ("overwrite","Overwrite","overwrite log file")]
-
-  # print(bpy.data.actions)
+             
   #search for list of actions to export as .md5anims
   #md5animtargets = []
-  # for anim in bpy.data.actions:
-  #   print(anim.name)
-  #   scene.custom.add()
-  #   scene.custom[-1].name = anim.name
-  #print(md5animtargets[0])
-
+  #for anim in bpy.data.actions:
+  # md5animtargets.append( (anim.name, anim.name, anim.name) )
+    
   #md5animtarget = None
   #if( len( md5animtargets ) > 0 ):
-  #  md5animtarget = EnumProperty( name="Anim",items = md5animtargets, description = "choose animation to export",)# default = md5animtargets[0] )
-  #print(md5animtarget)
-
+  # md5animtarget = EnumProperty( name="Anim", items = md5animtargets, description = "choose animation to export", default = md5animtargets[0] )
+    
   exportModes = [("mesh & anim", "Mesh & Anim", "Export .md5mesh and .md5anim files."),
          ("anim only", "Anim only.", "Export .md5anim only."),
          ("mesh only", "Mesh only.", "Export .md5mesh only.")]
@@ -878,7 +881,8 @@ class ExportMD5(bpy.types.Operator):
   md5name = StringProperty(name="MD5 Name", description="MD3 header name / skin path (64 bytes)",maxlen=64,default="")
   md5exportList = EnumProperty(name="Exports", items=exportModes, description="Choose export mode.", default='mesh & anim')
   #md5logtype = EnumProperty(name="Save log", items=logenum, description="File logging options",default = 'console')
-  md5scale = FloatProperty(name="Scale", description="Scale all objects from world origin (0,0,0)", min=0.001, max=1000.0, default=1.0,precision=6)
+  bpy.types.Scene.md5scale = FloatProperty(name="Scale", description="Scale all objects from world origin (0,0,0)", default=1.0,precision=5)
+
   #md5offsetx = FloatProperty(name="Offset X", description="Transition scene along x axis",default=0.0,precision=5)
   #md5offsety = FloatProperty(name="Offset Y", description="Transition scene along y axis",default=0.0,precision=5)
   #md5offsetz = FloatProperty(name="Offset Z", description="Transition scene along z axis",default=0.0,precision=5)
@@ -898,20 +902,7 @@ class ExportMD5(bpy.types.Operator):
         animationFilePath = self.properties.filepath + ".md5anim"
     else:
         animationFilePath = None
-    
     save_md5(modelFilePath, animationFilePath)
-
-    scene=context.scene
-    # idx=scene.custom_index
-    # item = scene.custom.add()
-    # item.id = len(scene.custom)
-    # item.name = bpy.data.actions.name
-    # for anim in bpy.data.actions:
-      # print(anim.name)
-    # item.name = get_activeSceneObject() # assign name of selected object
-    # scene.custom_index = (len(scene.custom)-1)
-    # info = '%s added to list' % (item.name)
-    # self.report({'INFO'}, info)
     return {'FINISHED'}
 
   def invoke(self, context, event):
@@ -919,7 +910,7 @@ class ExportMD5(bpy.types.Operator):
         # fixed for 2.56? Katsbits.com (via Nic B)
         # original WindowManager.add_fileselect(self)
         WindowManager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
+        return {"RUNNING_MODAL"}  
 
 def getSuggestedModelName():
     fileName = bpy.path.basename(bpy.data.filepath)
@@ -958,7 +949,7 @@ def getTargetTerasologyAnimFilePath(context):
 class TerasologyMD5MeshExportOperator(bpy.types.Operator):
     bl_idname      = 'md5.terasology_export_md5mesh'
     bl_label       = "Export md5mesh to terasology"
-    bl_description = "Exports the mesh without asking further questions"
+    bl_description = "Exports the mesh without aksing further questions"
     
     def invoke(self, context, event):
         global scale # TODO get rid of it, using a global variable is no good style..
@@ -973,7 +964,7 @@ class TerasologyMD5MeshExportOperator(bpy.types.Operator):
 class TerasologyMD5AnimExportOperator(bpy.types.Operator):
     bl_idname      = 'md5.terasology_export_md5anim'
     bl_label       = "Export md5mesh to terasology"
-    bl_description = "Exports the animation without asking further questions"
+    bl_description = "Exports the animation without aksing further questions"
     
     def invoke(self, context, event):
         global scale # TODO get rid of it, using a global variable is no good style..
@@ -984,11 +975,55 @@ class TerasologyMD5AnimExportOperator(bpy.types.Operator):
         
         save_md5(modelFilePath, animationFilePath)
         return{'FINISHED'}
+
+
+def findAnimation(animName):
+  for anim in bpy.data.actions:
+    if animName in anim:
+      flag=1
+      return anim
+
+  return null
+
+
+import json,os
+from collections import OrderedDict
+class ExportPrefabForTerasology(bpy.types.Operator):
+  bl_idname="export.prefab"
+  bl_label="Export a prefab for Terasology"
+
+  def invoke(self, context, event):
+    current_file_dir=os.path.dirname(__file__)
+    file_in_path=os.path.join(current_file_dir,"template.prefab")
+    with open(file_in_path, 'r') as inFile:
+      data = json.load(inFile, object_pairs_hook=OrderedDict)
+
+    ModelName=getSuggestedModelName()
+
+    data["skeletalmesh"]["mesh"]=ModelName
+    data["skeletalmesh"]["material"]=ModelName+"Skin"
+    data["skeletalmesh"]["animation"]=ModelName+"Idle"#later check if the animation actually exists
+    data["WildAnimal"]["name"]=ModelName[:1].upper()+ModelName[1:]
+    data["WildAnimal"]["icon"]="WildAnimals:"+ModelName+"Icon"
+    # data["Die"]["animationPool"]="["+findAnimation("death")+"]"
+    assetDirectory=getTargetTerasologyAssetsDirectory(context)
+    FileName=ModelName+".prefab"
+    checkPath(assetDirectory)
+    print("Exporting prefab at: "+assetDirectory)
+    with open(os.path.join(assetDirectory,FileName),"w") as outFile:
+      json.dump(data, outFile, indent=2)
+
+    return{'FINISHED'}
+
+
+
+  
+
       
 class TerasologyMD5MeshAndAnimExportOperator(bpy.types.Operator):
     bl_idname      = 'md5.terasology_export_md5'
     bl_label       = "Export md5mesh and md5anim to terasology"
-    bl_description = "Exports the mesh and animation without asking further questions"
+    bl_description = "Exports the mesh and animation without aksing further questions"
     
     def invoke(self, context, event):
         global scale # TODO get rid of it, using a global variable is no good style..
@@ -998,7 +1033,6 @@ class TerasologyMD5MeshAndAnimExportOperator(bpy.types.Operator):
         animationFilePath = getTargetTerasologyAnimFilePath(context)
         
         save_md5(modelFilePath, animationFilePath)
-        print("Animations", self.md5animtarget)
         return{'FINISHED'}
   
 def onTerasologyModulePathUpdate(self, context):
@@ -1015,38 +1049,6 @@ class TerasologyMd5AddonPreferences(bpy.types.AddonPreferences):
             description="Path to a terasology module directory",
             update=onTerasologyModulePathUpdate
             )
-
-class RENDERLAYER_UL_renderlayers(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        #assert(isinstance(item, bpy.types.SceneRenderLayer)
-        layer = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
-            layout.prop(layer, "enabled", text="", index=index)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label("", icon_value=icon)
-      #split = layout.split(0.3)
-      #split.label("Index: %d" %(index))
-      #layout.prop(item,"name", text="", emboss=False, translate=False, icon_value=icon)
-    def invoke(self, context, event):
-      pass
-
-class action_poplulate(bpy.types.Operator):
-  bl_idname="scene.populate"
-  bl_label="Refresh action list"
-
-  def execute(self, context):
-
-    context.scene.action_group.clear()
-
-    for anim in bpy.data.actions:
-      item = context.scene.action_group.add()
-      item.name = anim.name
-      item.enabled = False
-    return{'FINISHED'}
-
-
     
 class TerasologyExportPanel(bpy.types.Panel):
     bl_idname = "OBJECT_PT_MD5_terasologyExport"
@@ -1057,10 +1059,7 @@ class TerasologyExportPanel(bpy.types.Panel):
     
     def draw(self, context):
         layout = self.layout
-        scene = bpy.context.scene
-        rd = scene.render
-        # st = context.space_data
-        ob=context.object
+        scene = context.scene
         preferences = context.user_preferences.addons[__name__].preferences
         
         layout.prop(preferences, "terasology_module_directory", text="Ter. Module")
@@ -1069,42 +1068,29 @@ class TerasologyExportPanel(bpy.types.Panel):
         col.enabled = preferences.terasology_module_directory != ""
         meshFileName = getTargetTerasologyMeshFileName(context)
         animFileName = getTargetTerasologyAnimFileName(context)
+        # value=context.scene.Scale
+        # value=ExportMD5.md5scale.Scale
+        # print("^^^^^^^^^^^",value)
+        # col.prop(ExportMD5.md5scale,"Scale")  
         col.operator(TerasologyMD5MeshExportOperator.bl_idname, text="Export " + meshFileName)
         col.operator(TerasologyMD5AnimExportOperator.bl_idname, text="Export " + animFileName)
-        #layout.template_ID(st, "action", new="action.new", unlink="action.unlink")
-        col.operator("scene.populate")
-        col.template_list("RENDERLAYER_UL_renderlayers", "", scene, "action_group", scene, "action_list_index")
-        #col.operator_menu_enum(ExportMD5.bl_idname, "md5animtarget", text="select animation")
-        col.operator(TerasologyMD5MeshAndAnimExportOperator.bl_idname, text="Export Selected Animations")
-        
-        layout.label(text="Note: Blend & scene name determines file name")
+        col.operator("export.prefab",text="Export prefab file")
+        col.operator(TerasologyMD5MeshAndAnimExportOperator.bl_idname, text="Export Both")
+        layout.label(text="Note: Blend & scene naermines file name")
 
 def menu_func(self, context):
   default_path = os.path.splitext(bpy.data.filepath)[0]
   self.layout.operator(ExportMD5.bl_idname, text="idTech 4 MD5 (.md5mesh .md5anim)", icon='BLENDER').filepath = default_path
   
-class CustomProp(bpy.types.PropertyGroup):
-  name = StringProperty()
-  enabled = BoolProperty()
-  #name = bpy.data.actions
-
 def register():
   bpy.utils.register_module(__name__)  #mikshaw
   bpy.types.INFO_MT_file_export.append(menu_func)
-  # bpy.types.Scene.custom = CollectionProperty(type = CustomProp)
-  # bpy.types.Scene.action_list_index = bpy.props.IntProperty()
-  bpy.types.Scene.custom_index = IntProperty()
-  bpy.types.Scene.action_group = CollectionProperty(type=CustomProp)
 
 def unregister():
   bpy.utils.unregister_module(__name__)  #mikshaw
   bpy.types.INFO_MT_file_export.remove(menu_func)
-  # del bpy.types.Scene.custom
-  # del bpy.types.Scene.custom_index
-  del bpy.types.Scene.action_group
 
 if __name__ == "__main__":
   register()
-
 
 
